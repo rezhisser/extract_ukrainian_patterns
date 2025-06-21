@@ -73,6 +73,12 @@ for root, _, files in os.walk(project_path):
             try:
                 with open(filepath, encoding='utf-8') as f:
                     for i, line in enumerate(f, 1):
+                        if '//' in line:
+                            comment_index = line.find('//')
+                            protocol_index = line.find('://')
+                            if not (
+                                    protocol_index != -1 and comment_index > protocol_index - 1 and comment_index < protocol_index + 3):
+                                line = line[:comment_index]
                         if ukrainian_pattern.search(line) and not is_technical_line(line):
                             extracted, pattern = extract_ukrainian_text_and_pattern(line)
                             if extracted:
