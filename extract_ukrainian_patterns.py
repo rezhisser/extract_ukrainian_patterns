@@ -3,7 +3,7 @@ import re
 import pandas as pd
 
 # 🔧 Налаштування
-project_path = r'c:\Users\rezhi\Downloads\HUMAN\frontend\humanedtech-lms-human-front'
+from config_local import project_path
 extensions = ['.html', '.ts']
 ignore_patterns = [
     r'\bimport\b', r'\bfrom\b', r'\bexport\b', r'\bconsole\.log\b',
