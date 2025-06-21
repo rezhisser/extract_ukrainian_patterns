@@ -20,19 +20,38 @@ def is_technical_line(line):
 # Функція витягування тексту та визначення патерну
 def extract_ukrainian_text_and_pattern(line):
     patterns = [
-        ("single_quotes", r"'([^']*[А-Яа-яІіЇїЄєҐґ]{2,}[^']*)'"),
-        ("double_quotes", r'"([^"]*[А-Яа-яІіЇїЄєҐґ]{2,}[^"]*)"'),
-        ("backticks", r'`([^`]*[А-Яа-яІіЇїЄєҐґ]{2,}[^`]*)`'),
+        ("single_quotes", r"'([^']*[А-Яа-яІіЇїЄєҐґ\'`]{2,}[^']*)'"),
+        ("double_quotes", r'"([^"]*[А-Яа-яІіЇїЄєҐґ\'`]{2,}[^"]*)"'),
+        ("backticks", r'`([^`]*[А-Яа-яІіЇїЄєҐґ\'`]{2,}[^`]*)`'),
         ("html_text", r'>\s*([А-Яа-яІіЇїЄєҐґ0-9 ,.\-:;!?()\'"]{3,})\s*<')
     ]
 
     for name, pattern in patterns:
         matches = re.findall(pattern, line)
         if matches:
-            cleaned = [m.strip() for m in matches if m.strip()]
-            if cleaned:
-                return ' | '.join(cleaned), name
+            cleaned_results = []
+            for match in matches:
+                # 1. Деекрануємо апострофи
+                text = match.replace("\\'", "'")
+
+                # 2. Видаляємо динамічні вставки типу ${...}
+                no_vars = re.sub(r'\${[^}]+}', '', text)
+
+                # 3. Замінюємо латинське 'i' на українське 'і' в кириличних словах
+                def fix_i(word):
+                    if re.search(r'[А-Яа-яІіЇїЄєҐґ]', word):  # якщо є хоч одна кирилична літера
+                        return word.replace('i', 'і')
+                    return word
+
+                # 4. Витягуємо українські фрази та застосовуємо fix_i
+                ukrainian_chunks = re.findall(r"[А-Яа-яІіЇїЄєҐґ0-9 ,.\-:;!?()']{2,}", no_vars)
+                fixed = [fix_i(chunk.strip()) for chunk in ukrainian_chunks if chunk.strip()]
+                cleaned_results.extend(fixed)
+
+            if cleaned_results:
+                return ' | '.join(cleaned_results), name
     return None, None
+
 
 # Визначаємо джерело (source): атрибут чи шаблон
 def detect_source(line):
