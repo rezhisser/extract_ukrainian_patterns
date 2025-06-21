@@ -6,7 +6,7 @@ import pandas as pd
 from config_local import project_path, output_path
 extensions = ['.html', '.ts']
 ignore_dirs = [
-    '\\mriia-sync\\',  # або '/mriia-sync/' якщо Linux/macOS
+    '\\mriia-sync\\',
 ]
 ignore_patterns = [
     r'\bimport\b', r'\bfrom\b', r'\bexport\b', r'\bconsole\.log\b',
@@ -16,7 +16,6 @@ ignore_patterns = [
 ukrainian_pattern = re.compile(r'[А-Яа-яІіЇїЄєҐґ]{2,}')
 results = []
 
-# 🧠 Допоміжні функції
 def is_technical_line(line):
     return any(re.search(pattern, line) for pattern in ignore_patterns)
 
@@ -26,13 +25,14 @@ def has_latin(word):
 def has_ukrainian(word):
     return re.search(r'[А-Яа-яІіЇїЄєҐґ]', word) is not None
 
-# 🔄 Функція пошуку українського тексту
 def extract_ukrainian_text_and_pattern(line):
     patterns = [
+        ("interpolation_prefix", r'([А-Яа-яІіЇїЄєҐґ]{2,})[^А-Яа-яІіЇїЄєҐґ]*\${'),
+        ("interpolated_with_span", r'([^<>]*[А-Яа-яІіЇїЄєҐґ]{2,}[^<>]*)\s*<span[^>]*>\s*{{[^}]+}}\s*</span>'),
         ("single_quotes", r"'([^'\\]*(?:\\.[^'\\]*)*)'"),
         ("double_quotes", r'"([^"]*[А-Яа-яІіЇїЄєҐґ\'`]{2,}[^"]*)"'),
         ("backticks", r'`([^`]*[А-Яа-яІіЇїЄєҐґ\'`]{2,}[^`]*)`'),
-        ("html_text", r'>\s*([А-Яа-яІіЇїЄєҐґA-Za-z0-9 ,.\-:;!?()\'"]{3,})\s*<')
+        ("html_text", r'>\s*([^<]*[А-Яа-яІіЇїЄєҐґ]{2,}[^<]*)\s*<')
     ]
 
     extracted_chunks = []
@@ -43,28 +43,33 @@ def extract_ukrainian_text_and_pattern(line):
             for match in matches:
                 text = match.replace("\\'", "'")
                 no_vars = re.sub(r'\${[^}]+}', '', text)
-                text_no_html = re.sub(r'<[^>]+>', '', no_vars)
 
-                def fix_i(word):
-                    return word.replace('i', 'і') if has_ukrainian(word) else word
+                # зберігаємо розмітку типу <b>, <br>, <span>
+                no_vars_preserved_tags = re.sub(r'<(?!/?(b|br|i|span)[ >])[^>]+>', '', no_vars)
 
-                parts = re.split(r'\s*[,|]\s*', text_no_html)
-                for part in parts:
-                    part = part.strip()
-                    if not part:
-                        continue
+                # ✂️ Витягуємо фрази, що містять українські літери
+                phrases = [phrase for phrase in re.findall(r"[^%{}<>]+", no_vars_preserved_tags) if
+                           ukrainian_pattern.search(phrase)]
 
-                    words = part.split()
-                    fixed_words = [fix_i(word) for word in words]
+                for phrase in phrases:
+                    words = phrase.strip().split()
+                    fixed_words = []
+                    for word in words:
+                        if has_ukrainian(word) and has_latin(word):
+                            fixed_words.append(word)
+                        else:
+                            fixed_words.append(word)
+
                     fixed_text = ' '.join(fixed_words)
 
                     if ukrainian_pattern.search(fixed_text):
                         contains_latin = any(has_ukrainian(w) and has_latin(w) for w in fixed_words)
-                        extracted_chunks.append((fixed_text, name, contains_latin))
+                        extracted_chunks.append((fixed_text.strip(), name, contains_latin))
+
+            break  # 🛑 припиняємо після першого знайденого патерну
 
     return extracted_chunks
 
-# 📍 Визначаємо джерело (source)
 def detect_source(line):
     if '<ng-template' in line or '</ng-template>' in line:
         return 'ng-template'
@@ -84,7 +89,6 @@ for root, _, files in os.walk(project_path):
 
         filepath = os.path.join(root, file)
 
-        # ⛔ Пропустити файли в ігнорованих директоріях
         if any(ignored in filepath for ignored in ignore_dirs):
             continue
 
