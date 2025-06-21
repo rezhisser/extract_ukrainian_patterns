@@ -73,6 +73,6 @@ for root, _, files in os.walk(project_path):
 df = pd.DataFrame(results).drop_duplicates()
 
 # Збереження
-output_path = r'c:\Users\rezhi\Downloads\angular_texts.xlsx'
+from config_local import output_path
 df.to_excel(output_path, index=False)
 print(f'✅ Збережено в {output_path}')
