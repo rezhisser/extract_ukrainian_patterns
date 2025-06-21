@@ -27,6 +27,7 @@ def has_ukrainian(word):
 
 def extract_ukrainian_text_and_pattern(line):
     patterns = [
+        ("interpolation_prefix", r'([А-Яа-яІіЇїЄєҐґ]{2,})[^А-Яа-яІіЇїЄєҐґ]*\${'),
         ("interpolated_with_span", r'([^<>]*[А-Яа-яІіЇїЄєҐґ]{2,}[^<>]*)\s*<span[^>]*>\s*{{[^}]+}}\s*</span>'),
         ("single_quotes", r"'([^'\\]*(?:\\.[^'\\]*)*)'"),
         ("double_quotes", r'"([^"]*[А-Яа-яІіЇїЄєҐґ\'`]{2,}[^"]*)"'),
