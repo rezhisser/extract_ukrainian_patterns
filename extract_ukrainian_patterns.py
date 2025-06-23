@@ -20,7 +20,7 @@ ignore_patterns = [
     r'\bselector\b', r'\bstyleUrls\b', r'\btemplateUrl\b', r'\b@.*\b',
     r'\btrue\b', r'\bfalse\b', r'\bnull\b'
 ]
-ukrainian_pattern = re.compile(r'[А-Яа-яІіЇїЄєҐґ]{2,}')
+ukrainian_pattern = re.compile(r'[А-Яа-яІіЇїЄєҐґ]{1,}')
 results = []
 
 def is_technical_line(line):
@@ -50,14 +50,23 @@ def clean_html_preserve_tags(html):
 
 def extract_ukrainian_text_and_pattern(line):
     patterns = [
+        # Текст-посилання
+        ("a_tag_text", r'<a[^>]*>([\s\S]*?[А-Яа-яІіЇїЄєҐґ][\s\S]*?)</a>'),
+
+        # Одинарні лапки з escape-символами та принаймні однією українською літерою
+        ("single_quotes", r"'((?:[^'\\]|\\.)*[А-Яа-яІіЇїЄєҐґ](?:[^'\\]|\\.)*)'"),
+
+        # Подвійні лапки з escape-символами та принаймні однією українською літерою
+        ("double_quotes", r'"((?:[^"\\]|\\.)*[А-Яа-яІіЇїЄєҐґ](?:[^"\\]|\\.)*)"'),
+
+        # Бектики з escape-символами та принаймні однією українською літерою
+        ("backticks", r'`((?:[^`\\]|\\.)*[А-Яа-яІіЇїЄєҐґ](?:[^`\\]|\\.)*)`'),
+
+        ("html_text", r'>\s*([^<]*[А-Яа-яІіЇїЄєҐґ]{2,}[^<]*)\s*<'),
         ("interpolation_before_var", r'([А-Яа-яІіЇїЄєҐґ]{2,}[^$]*?)\${[^}]+}'),
         ("interpolation_after_var", r'\${[^}]+}([^А-Яа-яІіЇїЄєҐґ<>]*[А-Яа-яІіЇїЄєҐґ]{2,})'),
         ("interpolation_prefix", r'([А-Яа-яІіЇїЄєҐґ]{2,})[^А-Яа-яІіЇїЄєҐґ]*\${'),
         ("interpolated_with_span", r'([^<>]*[А-Яа-яІіЇїЄєҐґ]{2,}[^<>]*)\s*<span[^>]*>\s*{{[^}]+}}\s*</span>'),
-        ("single_quotes", r"'([^'\\]*(?:\\.[^'\\]*)*)'"),
-        ("double_quotes", r'"([^"]*[А-Яа-яІіЇїЄєҐґ\'`]{2,}[^"]*)"'),
-        ("backticks", r'`([^`]*[А-Яа-яІіЇїЄєҐґ\'`]{2,}[^`]*)`'),
-        ("html_text", r'>\s*([^<]*[А-Яа-яІіЇїЄєҐґ]{2,}[^<]*)\s*<')
     ]
 
     extracted_chunks = []
