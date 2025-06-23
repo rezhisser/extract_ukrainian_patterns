@@ -1,12 +1,19 @@
 import os
 import re
 import pandas as pd
+from bs4 import BeautifulSoup, NavigableString
 
 # 🔧 Налаштування
 from config_local import project_path, output_path
-extensions = ['.html', '.ts']
+extensions = ['.html', '.js', '.ts', '.component.ts', '.service.ts', '.directive.ts', '.enum.ts']
 ignore_dirs = [
     '\\mriia-sync\\',
+    '\\lines-editor\\',
+    '\\lines-editor----research-notion\\',
+]
+# Повний або частковий шлях до файлу, який треба ігнорувати
+ignore_files = [
+    os.path.join('eusign.js')
 ]
 ignore_patterns = [
     r'\bimport\b', r'\bfrom\b', r'\bexport\b', r'\bconsole\.log\b',
@@ -25,8 +32,26 @@ def has_latin(word):
 def has_ukrainian(word):
     return re.search(r'[А-Яа-яІіЇїЄєҐґ]', word) is not None
 
+def clean_html_preserve_tags(html):
+    """
+    Залишає лише дозволені теги (br, b, i, span) та спецсимволи (&nbsp; тощо),
+    видаляє всі інші HTML-теги. Не декодує HTML-entity.
+    """
+    allowed_tags = {'br', 'b', 'i', 'span'}
+    soup = BeautifulSoup(html, 'html.parser')
+
+    for tag in soup.find_all(True):
+        if tag.name not in allowed_tags:
+            tag.unwrap()
+
+    result = ''.join(str(c) if isinstance(c, NavigableString) else str(c) for c in soup.contents)
+    return result
+
+
 def extract_ukrainian_text_and_pattern(line):
     patterns = [
+        ("interpolation_before_var", r'([А-Яа-яІіЇїЄєҐґ]{2,}[^$]*?)\${[^}]+}'),
+        ("interpolation_after_var", r'\${[^}]+}([^А-Яа-яІіЇїЄєҐґ<>]*[А-Яа-яІіЇїЄєҐґ]{2,})'),
         ("interpolation_prefix", r'([А-Яа-яІіЇїЄєҐґ]{2,})[^А-Яа-яІіЇїЄєҐґ]*\${'),
         ("interpolated_with_span", r'([^<>]*[А-Яа-яІіЇїЄєҐґ]{2,}[^<>]*)\s*<span[^>]*>\s*{{[^}]+}}\s*</span>'),
         ("single_quotes", r"'([^'\\]*(?:\\.[^'\\]*)*)'"),
@@ -41,34 +66,19 @@ def extract_ukrainian_text_and_pattern(line):
         matches = re.findall(pattern, line)
         if matches:
             for match in matches:
-                text = match.replace("\\'", "'")
+                text = match.replace("\\'", "'") if isinstance(match, str) else match[0]
                 no_vars = re.sub(r'\${[^}]+}', '', text)
+                cleaned = clean_html_preserve_tags(no_vars)
 
-                # зберігаємо розмітку типу <b>, <br>, <span>
-                no_vars_preserved_tags = re.sub(r'<(?!/?(b|br|i|span)[ >])[^>]+>', '', no_vars)
+                if ukrainian_pattern.search(cleaned):
+                    words = cleaned.strip().split()
+                    contains_latin = any(has_ukrainian(w) and has_latin(w) for w in words)
+                    extracted_chunks.append((cleaned.strip(), name, contains_latin))
 
-                # ✂️ Витягуємо фрази, що містять українські літери
-                phrases = [phrase for phrase in re.findall(r"[^%{}<>]+", no_vars_preserved_tags) if
-                           ukrainian_pattern.search(phrase)]
-
-                for phrase in phrases:
-                    words = phrase.strip().split()
-                    fixed_words = []
-                    for word in words:
-                        if has_ukrainian(word) and has_latin(word):
-                            fixed_words.append(word)
-                        else:
-                            fixed_words.append(word)
-
-                    fixed_text = ' '.join(fixed_words)
-
-                    if ukrainian_pattern.search(fixed_text):
-                        contains_latin = any(has_ukrainian(w) and has_latin(w) for w in fixed_words)
-                        extracted_chunks.append((fixed_text.strip(), name, contains_latin))
-
-            break  # 🛑 припиняємо після першого знайденого патерну
-
+            break  # ✅ Зупинка на першій вдалій групі
     return extracted_chunks
+
+
 
 def detect_source(line):
     if '<ng-template' in line or '</ng-template>' in line:
@@ -88,6 +98,9 @@ for root, _, files in os.walk(project_path):
             continue
 
         filepath = os.path.join(root, file)
+
+        if any(os.path.normpath(filepath).endswith(os.path.normpath(ignore)) for ignore in ignore_files):
+            continue
 
         if any(ignored in filepath for ignored in ignore_dirs):
             continue
